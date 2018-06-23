@@ -1,18 +1,91 @@
 from music21 import converter, instrument, note, chord
 import glob
-
+import numpy
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.layers import LSTM
+from keras.layers import Activation
+from keras.callbacks import ModelCheckpoint
+from keras.utils import to_categorical
 notes = []
-for file in glob.glob("midi_songs/*.mid"):
-    midi = converter.parse(file)
-    notes_to_parse = None
-    parts = instrument.partitionByInstrument(midi)
-    if parts:
-        notes_to_parse = parts.parts[0].recurse()
-    else:
-        notes_to_parse = midi.flat.notes
-    for element in notes_to_parse:
-        if isinstance(element, note.Note):
-            notes.append(str(element.pitch))
-        elif isinstance(element, chord.Chord):
-            notes.append('.'.join(str(n) for n in element.normalOrder))
-print(notes)
+
+def GetNotes(path = "midi_songs/*.mid"):
+    ''' Takes in a optional path argument and converts .mid files into notes'''
+    for file in glob.glob(path):
+        midi = converter.parse(file)
+        notes_to_parse = None
+        parts = instrument.partitionByInstrument(midi)
+        if parts:
+            notes_to_parse = parts.parts[0].recurse()
+        else:
+            notes_to_parse = midi.flat.notes
+        for element in notes_to_parse:
+            if isinstance(element, note.Note):
+                notes.append(str(element.pitch))
+            elif isinstance(element, chord.Chord):
+                notes.append('.'.join(str(n) for n in element.normalOrder))
+    return notes
+
+
+def NotesToInteger(notes,length = 100):
+    ''' Takes in notes and converts them into integers to be able to feed it into a neural network
+        notes : The list of notes
+        length: The length of sequences we are going to feed into the LSTM
+    '''
+    sequence_length = 100
+    pitchnames = sorted(set(item for item in notes))
+    note_to_int = dict((note, number) for number, note in enumerate(pitchnames))
+    network_input = []
+    network_output = []
+    for i in range(0, len(notes) - sequence_length, 1):
+        sequence_in = notes[i:i + sequence_length]
+        sequence_out = notes[i + sequence_length]
+        network_input.append([note_to_int[char] for char in sequence_in])
+        network_output.append(note_to_int[sequence_out])
+    n_patterns = len(network_input)
+    network_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))
+    network_input = network_input / float(len(set(notes)))
+    network_output = to_categorical(network_output)
+    return network_input,network_output
+
+def network(network_input, notes):
+    ''' Defines our LSTM network we will be using'''
+    model = Sequential()
+    model.add(LSTM(
+        512,
+        input_shape=(network_input.shape[1], network_input.shape[2]),
+        return_sequences=True
+    ))
+    model.add(Dropout(0.3))
+    model.add(LSTM(512, return_sequences=True))
+    model.add(Dropout(0.3))
+    model.add(LSTM(512))
+    model.add(Dense(256))
+    model.add(Dropout(0.3))
+    model.add(Dense(len(set(notes))))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    return model
+
+
+def train_network():
+    notes = GetNotes()
+    network_input, network_output = NotesToInteger(notes)
+    model = network(network_input, notes)
+    filepath = "weights-improvement - {epoch:02d} - {loss:.4f}.hdf"
+
+    checkpoint = ModelCheckpoint(
+        filepath,
+        monitor='loss',
+        verbose=0,
+        save_best_only=True,
+        mode='min'
+    )
+    callbacks_list = [checkpoint]
+    model.fit(network_input, network_output, epochs=200, batch_size=64, callbacks=callbacks_list)
+
+
+
+if __name__ == '__main__':
+    train_network()

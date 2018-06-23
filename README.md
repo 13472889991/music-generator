@@ -1,3 +1,6 @@
+# Music Generator
+Given a set of MIDI files, this will generate music
+
 # Setup
 Clone repository. Go to terminal and type
 
@@ -7,7 +10,7 @@ Clone repository. Go to terminal and type
 
 Setup virtual environment
 
-`python3.6 -m virtual env venv`
+`python3.6 -m virtualenv venv`
 
 `source venv/bin/activate`
 
