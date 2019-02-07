@@ -1,5 +1,5 @@
 # Music Generator
-Given a set of MIDI files, this will generate music
+Given a set of MIDI files, this will generate music using a LSTM (Long short term memory neural network).
 
 # Setup
 Clone repository. Go to terminal and type
